@@ -8,6 +8,10 @@ def exists?
   not get_url.nil?
 end
 
+def current
+  @current ||= `ls -l /usr/local/bin | grep "mongod "`.split('/')[-2]
+end
+
 def get_url
   return @url unless @url.nil?
   uri = URI.parse("http://dl.mongodb.org/dl/osx/x86_64")
@@ -19,7 +23,7 @@ def download
   `curl #{get_url} > mongo.tgz`
 end
 
-def un_compress
+def uncompress
   `mkdir #{@version}`
   `tar -zxvf mongo.tgz`
   `rm mongo.tgz`
@@ -47,6 +51,12 @@ def link
   end
 end
 
+def stop_mongo
+  `ps | grep mongod`.split("\n").each do |l|
+    `kill -QUIT #{l.split(' ')[0]}`
+  end
+end
+
 def list
   `ls ~/.mongos`.split("\n")
 end
@@ -56,16 +66,16 @@ end
 
 case @action
   when 'use'
-    `ps | grep mongod`.split("\n").each do |l|
-      `kill -9 #{l.split(' ')[0]}`
-    end
+    stop_mongo
     raise "Wrong version" unless exists?
     unless list.include? @version
       download
-      un_compress
+      uncompress
       move
     end
     link
   when 'list'
-    puts list
+    list.each do |l|
+      puts "#{l == current ? '=> ' : '   '}\033[1;32;40m#{l}\033[0m"
+    end
 end
