@@ -1,0 +1,71 @@
+#!/usr/bin/ruby
+require "net/http"
+require "uri"
+
+raise "Wrong arguments" unless ARGV.size >= 1
+
+def exists?
+  not get_url.nil?
+end
+
+def get_url
+  return @url unless @url.nil?
+  uri = URI.parse("http://dl.mongodb.org/dl/osx/x86_64")
+  response = Net::HTTP.get_response(uri)
+  @url = response.body.split("\n").map{ |l| l if l.include?(@version) }.compact.first.split('"')[1]
+end
+
+def download
+  `curl #{get_url} > mongo.tgz`
+end
+
+def un_compress
+  `mkdir #{@version}`
+  `tar -zxvf mongo.tgz`
+  `rm mongo.tgz`
+end
+
+def move
+  a = `mkdir ~/.mongos`
+  a = `mkdir ~/.mongos/#{@version}`
+  `cp mongodb-osx-x86_64-#{@version}/bin/* ~/.mongos/#{@version}/`
+
+  `rm -R mongodb-osx-x86_64-#{@version}`
+end
+
+def link
+  files = %w(
+    mongo mongod mongodump mongoexport mongofiles mongoimport mongooplog
+    mongoperf mongorestore mongosmongosniff mongostat mongotop
+  )
+  files.each do |f|
+    `rm /usr/local/bin/#{f}`
+  end
+
+  files.each do |f|
+    `ln -s ~/.mongos/#{@version}/#{f} /usr/local/bin/#{f}`
+  end
+end
+
+def list
+  `ls ~/.mongos`.split("\n")
+end
+
+@action  = ARGV[0] 
+@version = ARGV[1]
+
+case @action
+  when 'use'
+    `ps | grep mongod`.split("\n").each do |l|
+      `kill -9 #{l.split(' ')[0]}`
+    end
+    raise "Wrong version" unless exists?
+    unless list.include? @version
+      download
+      un_compress
+      move
+    end
+    link
+  when 'list'
+    puts list
+end
